@@ -1,0 +1,127 @@
+
+
+
+/*
+Current status: INCOMPLETE
+The button reads need to have their states stored as events instead of being read right from the serial data stream.
+After that it should work fine, and should work with any combination of button presses as long as you change the
+  value of the arraylength to the appropriate value.
+  
+You must have the PSX Library downloaded to your Arduino/libraries folder.
+The library can be found here: http://playground.arduino.cc/Main/PSXLibrary
+*/
+
+
+/*  PSX Controller Decoder Library (Psx.pde)
+	Written by: Kevin Ahrendt June 22nd, 2008
+	Modified by: Alex Nunn April 1st, 2014
+	
+	Controller protocol implemented using Andrew J McCubbin's analysis.
+	http://www.gamesx.com/controldata/psxcont/psxcont.htm
+	
+	Shift command is based on tutorial examples for ShiftIn and ShiftOut
+	functions both written by Carlyn Maw and Tom Igoe
+	http://www.arduino.cc/en/Tutorial/ShiftIn
+	http://www.arduino.cc/en/Tutorial/ShiftOut
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/*Pinout for the PSX Controller
+9  Green ACK
+
+7  Blue Clock
+6  Yellow ATT
+5  Red +3-5 V
+4  Black and Grey GND
+3  Purple +7.6
+2  Orange Command
+1  Brown Data
+*/
+
+#include <Psx.h>                                          // Includes the Psx Library 
+                                                          // Any pins can be used since it is done in software
+#define dataPin 2   //Brown wire
+#define cmndPin 3   //Orange wire
+#define attPin 4    //Yellow wire
+#define clockPin 5  //Blue wire
+
+#define LEDPin 13
+
+Psx Psx;                                                  // Initializes the library
+
+unsigned int data = 0;                                    // data stores the controller response
+unsigned int konamicode[] = {psxUp, psxUp, psxDown, psxDown, psxLeft, psxRight, psxLeft, psxRight, psxSqu, psxX, psxStrt}; //The series of button presses to look out for
+const int arraylength = 11;
+boolean sequential = false;                               //Keeps track of whether or not the code is being entered right
+int counter = 0;                                          //Keeps track of how far along in the code the user is
+
+void setup()
+{
+  Psx.setupPins(dataPin, cmndPin, attPin, clockPin, 10);  // Defines what each pin is used 
+        //(Data Pin #, Cmnd Pin #, Att Pin #, Clk Pin #, Delay) 
+        // Delay measures how long the clock remains at each state,
+        // measured in microseconds. Too small delay may not work (under 5)
+  pinMode(LEDPin, OUTPUT);                                // Establishes LEDPin as an output so the LED can be seen
+  Serial.begin(9600);
+}
+
+void loop()
+{
+  data = Psx.read();                                      // Psx.read() initiates the PSX controller and returns the button data
+  Serial.println(data);                                   // Display the returned numeric value
+  konamiCode();
+  
+  delay(20);
+}
+
+
+void konamiCode(){
+  while(Psx.read()){                    //Checks to see if there is a value to be read.
+    data = Psx.read();                  //Reads data from psx controller
+    if(sequential == false){            //If the button presses were not previously in sequence...
+      if(data & konamicode[0]){         //...and if the data being read is the first button in the sequence...
+        sequential = true;              //...say that the sequence is in progress...
+        counter++;                      //...and add one to the counter, so we know where in the sequence it is.
+      }
+    }else{                              //If the button presses are already in sequence...
+      if(data & konamicode[counter]){   //...and if the data being read matches up with the next expected button press...
+        counter++;                      //...add one to the counter so the next time this function is called it checks for the next button press!
+      }
+      else{                             //Otherwise if the data being read doesn't match up with what we're expecting...
+        sequential = false;             //...say it is not sequential...
+        counter = 0;                    //...and reset the counter
+      }
+    }
+    if(counter == arraylength){         //If the counter reaches the number of expected button presses (11 in our case)...
+      codeComplete();                   //...run the codeComplete() function!
+    }
+    
+    
+  }
+  
+}
+
+
+//Launch balloons, get 30 lives, get all weapons, godmode, etc etc
+void codeComplete(){
+  Serial.print("SUCCESS!");
+  for(int i=0; i>10; i++){  //Blinks LED 10 times
+    digitalWrite(LEDPin, HIGH);
+    delay(200);
+    digitalWrite(LEDPin, LOW);
+    delay(200);
+  }
+}
+
